@@ -1,108 +1,51 @@
 const easymidi = require('easymidi');
 const audio = require('win-audio').speaker;
+const colors = require('colors');
 
-var controller = 'MiniLab';
+const terminal = require('./terminal');
+const render = require('./render');
+const ui = require('./ui');
+
+var controller = 'Arturia MiniLab mkII';
 
 var inputs = easymidi.getInputs();
 var outputs = easymidi.getOutputs();
 
-console.log('inputs found:', inputs);
-console.log('outputs found:', outputs);
+terminal.info('Inputs found:', inputs);
+terminal.info('Outputs found:', outputs);
 
-// TODO: loop through both inputs and outputs and select the MiniLab
-
-var input = new easymidi.Input(inputs[0]);
-var output = new easymidi.Output(outputs[1]);
-
-input.on('noteon', args => console.log('noteon', args));
-input.on('poly aftertouch', args => console.log('poly aftertouch', args));
-input.on('cc', args => console.log('cc', args));
-input.on('program', args => console.log('program', args));
-input.on('channel aftertouch', args => console.log('channel aftertouch', args));
-input.on('pitch', args => console.log('pitch', args));
-input.on('position', args => console.log('position', args));
-input.on('mtc', args => console.log('mtc', args));
-input.on('select', args => console.log('select', args));
-input.on('sysex', args => console.log('sysex', args));
-
-const render = {
-    deferred: false,
-    colors: [],
-    start () {
-        render.deferred = true;
-    },
-    end () {
-        render.deferred = false;
-        for (var pad = 0x0; pad < 0xF; pad++) {
-            render.color(pad, render.colors[pad]);
-        }
-    },
-    color (pad, color) {
-        let colors = {
-            'black': 0x00,
-            'red': 0x01,
-            'green': 0x04,
-            'yellow': 0x05,
-            'blue': 0x10,
-            'magenta': 0x11,
-            'cyan': 0x14,
-            'white': 0x7F,
-        }
-
-        // Keeps pad inside 0..F
-        pad = Math.max(0x0, Math.min(0xF, pad));
-
-        // Deferred rendering so we don't get flickering
-        if (render.deferred) {
-            render.colors[pad] = color;
-            return;
-        }
-
-        // Defaults to white, but selects color from table
-        color = colors[color] || colors['black'];
-
-        // Adds 0x70 to current pad
-        pad = 0x70 + pad;
-
-        // Generate SysEx call
-        let bytes = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x10, pad, color, 0xF7];
-
-        // Send the call
-        output.send('sysex', bytes);
-    },
-    clear () {
-        render.bar(0x0, 0xF, 'black');
-    },
-    bar (start, length, color) {
-        for (var pad = 0x0; pad < length; pad++) {
-            render.color(pad + start, color);
-        }
+terminal.status('Looking for proper input/output...');
+for (i = 0, input = null; input = inputs[i++];) {
+    if (~input.indexOf(controller)) {
+        terminal.cheer(`Found matching input "${input}" at index ${i - 1}.`);
+        global.input = new easymidi.Input(input);
+        break;
+    }
+}
+for (i = 0, output = null; output = outputs[i++];) {
+    if (~output.indexOf(controller)) {
+        terminal.cheer(`Found matching output "${output}" at index ${i - 1}.`);
+        global.output = new easymidi.Output(output);
+        break;
     }
 }
 
-const ui = {
-    colors: {
-        volume: 'magenta'
-    },
-    timeout: 2000,
-    renderVolume () {
-        // Get current volume and draw as a single bar (half the pads)
-        let volumeBars = Math.round(0xF * (audio.get() / 100) / 2);
-
-        // Detect if we're muted
-        if (audio.isMuted()) volumeBars = 0;
-        
-        // Renders
-        render.start();
-        render.clear();
-        render.bar(0x0, volumeBars, ui.colors.volume);
-        render.end();
-
-        // Set a clear UI timeout
-        if (ui.renderVolume.timeout) clearTimeout(ui.renderVolume.timeout);
-        ui.renderVolume.timeout = setTimeout(render.clear, ui.timeout);
-    }
+if (!global.input || !global.output) {
+    terminal.error(`No controller matching "${controller}" was found. Quitting...`);
+    process.exit();
+    return;
 }
+
+input.on('noteon', args => terminal.debug('noteon', args));
+input.on('poly aftertouch', args => terminal.debug('poly aftertouch', args));
+input.on('cc', args => terminal.debug('cc', args));
+input.on('program', args => terminal.debug('program', args));
+input.on('channel aftertouch', args => terminal.debug('channel aftertouch', args));
+input.on('pitch', args => terminal.debug('pitch', args));
+input.on('position', args => terminal.debug('position', args));
+input.on('mtc', args => terminal.debug('mtc', args));
+input.on('select', args => terminal.debug('select', args));
+input.on('sysex', args => terminal.debug('sysex', args));
 
 // Knobs
 input.on('cc', (params) => {
@@ -111,7 +54,6 @@ input.on('cc', (params) => {
         case 72: 
             // Calculates and sets volume
             volume = Math.round(100 * params.value / 127);
-            console.log('volume', volume);
             audio.set(volume);
 
             // Render volume bar
@@ -152,6 +94,9 @@ input.on('cc', (params) => {
             let colors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
             let color = colors[params.controller - 22];
             ui.colors.volume = color;
+
+            // Logs
+            terminal.status(`Color changed to "${color}".`);
 
             // Renders volume bar
             ui.renderVolume();
