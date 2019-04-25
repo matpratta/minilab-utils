@@ -1,0 +1,16 @@
+{
+  "name": "minilab-utils",
+  "version": "1.0.0",
+  "description": "Utilities based off MIDI controllers",
+  "main": "index.js",
+  "scripts": {
+    "start": "node .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "easymidi": "^1.0.1",
+    "win-audio": "^2.0.1"
+  }
+}
