@@ -39,7 +39,7 @@ const render = module.exports = {
         // Adds 0x70 to current pad
         pad = 0x70 + pad;
 
-        // Generate SysEx call
+        // Generate SysEx call (REF: https://forum.arturia.com/index.php?topic=93116.msg153137#msg153137)
         let bytes = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x10, pad, color, 0xF7];
 
         // Send the call
